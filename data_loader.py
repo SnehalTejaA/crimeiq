@@ -36,6 +36,7 @@ FEATURE_LABELS = {
     "wtuc":     "Weekly wage – transport ($)",
     "wfed":     "Weekly wage – federal ($)",
     "wage_gap_service_mfg": "Wage gap (service vs manufacturing)",
+    "pctymle": "% young males in population",
 }
 
 FEATURES_P4 = [
@@ -47,7 +48,7 @@ FEATURES_P4 = [
 FEATURE_CATEGORIES = {
     'Law Enforcement': ['prbarr', 'prbconv', 'polpc', 'avgsen', 'prbpris'],
     'Socioeconomic':   ['taxpc', 'wcon', 'wtuc', 'wfed', 'wage_gap_service_mfg'],
-    'Demographics':    ['pctmin80'],
+    'Demographics':    ['pctmin80', 'pctymle'],
     'Urbanization':    ['urban', 'density'],
     'Geographic':      ['west', 'central'],
 }
@@ -216,6 +217,8 @@ def run_scenario(feature_dict, scenario_type):
         sim['taxpc'] *= 0.7
         sim['wcon']  *= 0.9
         sim['wtuc']  *= 0.9
+        if 'wage_gap_service_mfg' in sim:
+            sim['wage_gap_service_mfg'] *= 1.2
     elif scenario_type == "Urban Growth":
         sim['density'] *= 1.2
         sim['urban']    = 1
@@ -223,13 +226,17 @@ def run_scenario(feature_dict, scenario_type):
 
 def interpret_query(query):
     q = query.lower()
-    if any(x in q for x in ["police decrease", "less police", "reduce police"]):
+    if any(x in q for x in ["police decrease", "less police",
+                             "reduce police", "mayor visit"]):
         return "Police Reduction"
-    elif any(x in q for x in ["increase police", "more police", "high policing"]):
+    elif any(x in q for x in ["increase police", "more police",
+                               "high policing"]):
         return "High Policing"
-    elif any(x in q for x in ["economic decline", "recession", "less tax"]):
+    elif any(x in q for x in ["economic decline", "recession",
+                               "less tax", "wage gap"]):
         return "Economic Decline"
-    elif any(x in q for x in ["urban growth", "population increase", "more dense"]):
+    elif any(x in q for x in ["urban growth", "population increase",
+                               "more dense"]):
         return "Urban Growth"
     else:
         return None

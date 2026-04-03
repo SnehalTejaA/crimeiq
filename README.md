@@ -112,6 +112,32 @@ Output: `{ "scenario_detected": "Police Reduction", "predicted_crime_rate": 0.03
 
 ---
 
+## Production Readiness
+
+The model supports two deployment modes:
+
+**1. Batch Processing**
+The system can run periodically (daily or weekly) to generate crime
+predictions for all counties and support long-term planning. Outputs
+are stored and used for trend analysis and resource allocation across
+law enforcement agencies.
+
+**2. Real-Time Prediction**
+The model is integrated into an API where users provide inputs such
+as police levels or economic conditions and receive instant
+predictions. This supports operational decision-making and live
+scenario simulation through the CrimeIQ interface.
+
+This flexibility allows the model to support both strategic planning
+and real-time decision-making. The model achieved R²≈0.905,
+indicating strong predictive performance. To ensure long-term
+reliability, data drift detection is built in (Tab 4 — Analytics
+Dashboard) to identify changes in input distributions over time.
+If performance degrades, the model can be retrained with updated
+data.
+
+---
+
 ## Team
 
 | Member | Role |
