@@ -13,62 +13,58 @@ DATA_URL = "https://raw.githubusercontent.com/nishapattim05-del/crime-project-da
 
 # The 14 VIF-selected features from Phase 3 (all VIF < 10)
 FEATURES = [
-    "prbarr", "prbconv", "prbpris", "avgsen",
-    "polpc", "density", "taxpc", "west", "central",
-    "urban", "pctmin80", "wcon", "wtuc", "wfed"
+    'ldensity', 'urban', 'west', 'prbarr', 'lprbconv',
+    'wtrd', 'taxpc', 'pctymle', 'polpc', 'central',
+    'pctmin80', 'mix', 'prbconv', 'wage_gap_service_mfg',
+    'clpolpc'
 ]
 TARGET = "crmrte"
 
 # Human-readable labels for UI display
 FEATURE_LABELS = {
-    "prbarr":   "Probability of arrest",
-    "prbconv":  "Probability of conviction",
-    "prbpris":  "Probability of prison sentence",
-    "avgsen":   "Average prison sentence (days)",
-    "polpc":    "Police per capita",
-    "density":  "Population density",
-    "taxpc":    "Tax revenue per capita ($)",
-    "west":     "Western region (0/1)",
-    "central":  "Central region (0/1)",
-    "urban":    "Urban county (0/1)",
-    "pctmin80": "% minority population (1980)",
-    "wcon":     "Weekly wage – construction ($)",
-    "wtuc":     "Weekly wage – transport ($)",
-    "wfed":     "Weekly wage – federal ($)",
-    "wage_gap_service_mfg": "Wage gap (service vs manufacturing)",
-    "pctymle": "% young males in population",
+    "ldensity":            "Log population density",
+    "urban":               "Urban county (0/1)",
+    "west":                "Western region (0/1)",
+    "prbarr":              "Probability of arrest",
+    "lprbconv":            "Log probability of conviction",
+    "wtrd":                "Weekly wage – retail trade ($)",
+    "taxpc":               "Tax revenue per capita ($)",
+    "pctymle":             "% young males in population",
+    "polpc":               "Police per capita",
+    "central":             "Central region (0/1)",
+    "pctmin80":            "% minority population (1980)",
+    "mix":                 "Offense mix (face-to-face ratio)",
+    "prbconv":             "Probability of conviction",
+    "wage_gap_service_mfg":"Wage gap (service vs manufacturing)",
+    "clpolpc":             "Change in log police per capita",
 }
 
-FEATURES_P4 = [
-    'prbarr', 'prbconv', 'polpc', 'taxpc', 'wcon', 'wtuc', 'wfed',
-    'density', 'urban', 'west', 'central', 'pctmin80', 'avgsen',
-    'prbpris', 'wage_gap_service_mfg'
-]
-
 FEATURE_CATEGORIES = {
-    'Law Enforcement': ['prbarr', 'prbconv', 'polpc', 'avgsen', 'prbpris'],
-    'Socioeconomic':   ['taxpc', 'wcon', 'wtuc', 'wfed', 'wage_gap_service_mfg'],
-    'Demographics':    ['pctmin80', 'pctymle'],
-    'Urbanization':    ['urban', 'density'],
+    'Law Enforcement': ['prbarr', 'prbconv', 'polpc', 'clpolpc'],
+    'Socioeconomic':   ['taxpc', 'wtrd', 'wage_gap_service_mfg'],
+    'Demographics':    ['pctymle', 'pctmin80'],
+    'Urbanization':    ['urban', 'ldensity'],
     'Geographic':      ['west', 'central'],
+    'Behavioral':      ['mix'],
 }
 
 # Slider ranges for what-if simulator (min, max, default, step)
 FEATURE_RANGES = {
-    "prbarr":   (0.05, 0.80, 0.30, 0.01),
-    "prbconv":  (0.05, 1.00, 0.50, 0.01),
-    "prbpris":  (0.05, 0.80, 0.40, 0.01),
-    "avgsen":   (1.0,  20.0, 9.0,  0.5),
-    "polpc":    (0.001, 0.01, 0.002, 0.0001),
-    "density":  (0.0,  8.0,  1.0,  0.1),
-    "taxpc":    (20.0, 120.0, 40.0, 1.0),
-    "west":     (0, 1, 0, 1),
-    "central":  (0, 1, 0, 1),
-    "urban":    (0, 1, 0, 1),
-    "pctmin80": (0.0, 70.0, 20.0, 1.0),
-    "wcon":     (150.0, 500.0, 285.0, 5.0),
-    "wtuc":     (200.0, 700.0, 375.0, 5.0),
-    "wfed":     (300.0, 800.0, 450.0, 5.0),
+    "ldensity":            (-5.0, 3.0, 0.5, 0.1),
+    "urban":               (0, 1, 0, 1),
+    "west":                (0, 1, 0, 1),
+    "prbarr":              (0.05, 0.80, 0.30, 0.01),
+    "lprbconv":            (-3.0, 0.5, -0.7, 0.1),
+    "wtrd":                (100.0, 500.0, 250.0, 5.0),
+    "taxpc":               (20.0, 120.0, 40.0, 1.0),
+    "pctymle":             (0.05, 0.25, 0.085, 0.001),
+    "polpc":               (0.001, 0.01, 0.002, 0.0001),
+    "central":             (0, 1, 0, 1),
+    "pctmin80":            (0.0, 70.0, 20.0, 1.0),
+    "mix":                 (0.0, 1.0, 0.3, 0.01),
+    "prbconv":             (0.05, 1.00, 0.50, 0.01),
+    "wage_gap_service_mfg":(-50.0, 100.0, 20.0, 1.0),
+    "clpolpc":             (-0.5, 0.5, 0.0, 0.01),
 }
 
 
@@ -76,7 +72,14 @@ def load_data():
     """Load dataset from GitHub or fall back to synthetic demo data."""
     try:
         df = pd.read_csv(DATA_URL)
+        # Engineer derived features
+        df['ldensity'] = np.log(df['density'].clip(lower=0.001))
+        df['lprbconv'] = np.log(df['prbconv'].clip(lower=0.001))
         df['wage_gap_service_mfg'] = df['wser'] - df['wmfg']
+        # clpolpc: change in log polpc by county
+        df = df.sort_values(['county', 'year'])
+        df['lpolpc'] = np.log(df['polpc'].clip(lower=0.0001))
+        df['clpolpc'] = df.groupby('county')['lpolpc'].diff().fillna(0)
         return df
     except Exception:
         return _generate_demo_data()
@@ -101,19 +104,13 @@ def _generate_demo_data():
                 "crmrte":   max(0.005, base_crime + np.random.normal(0, 0.005)),
                 "prbarr":   np.random.uniform(0.10, 0.70),
                 "prbconv":  np.random.uniform(0.10, 0.90),
-                "prbpris":  np.random.uniform(0.10, 0.70),
-                "avgsen":   np.random.uniform(3, 18),
-                "polpc":    np.random.uniform(0.001, 0.008),
-                "density":  np.random.uniform(0.01, 7.0),
-                "taxpc":    np.random.uniform(25, 110),
-                "west":     int(county % 3 == 0),
-                "central":  int(county % 3 == 1),
-                "urban":    int(np.random.random() > 0.7),
-                "pctmin80": np.random.uniform(2, 65),
-                "wcon":     np.random.uniform(180, 470),
-                "wtuc":     np.random.uniform(220, 650),
-                "wfed":     np.random.uniform(320, 750),
+                "ldensity":             np.random.uniform(-4, 2),
+                "lprbconv":             np.random.uniform(-2.5, 0.0),
+                "wtrd":                 np.random.uniform(120, 450),
+                "pctymle":              np.random.uniform(0.06, 0.22),
+                "mix":                  np.random.uniform(0.02, 0.95),
                 "wage_gap_service_mfg": np.random.uniform(-50, 100),
+                "clpolpc":              np.random.uniform(-0.3, 0.3),
             }
             rows.append(row)
     return pd.DataFrame(rows)
@@ -215,12 +212,10 @@ def run_scenario(feature_dict, scenario_type):
         sim['prbarr'] *= 0.8
     elif scenario_type == "Economic Decline":
         sim['taxpc'] *= 0.7
-        sim['wcon']  *= 0.9
-        sim['wtuc']  *= 0.9
         if 'wage_gap_service_mfg' in sim:
             sim['wage_gap_service_mfg'] *= 1.2
     elif scenario_type == "Urban Growth":
-        sim['density'] *= 1.2
+        sim['ldensity'] += 0.2
         sim['urban']    = 1
     return sim
 

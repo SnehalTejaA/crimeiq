@@ -216,18 +216,34 @@ with tab2:
 
     with col_sliders:
         st.markdown("**Law Enforcement Factors**")
-        for feat in ["prbarr", "prbconv", "prbpris", "avgsen", "polpc"]:
+        for feat in ["prbarr", "lprbconv", "prbconv", "polpc", "clpolpc"]:
             mn, mx, dv, step = FEATURE_RANGES[feat]
             feature_vals[feat] = st.slider(
-                FEATURE_LABELS[feat], mn, mx, dv, step,
+                FEATURE_LABELS[feat], float(mn), float(mx), float(dv), float(step),
                 key=f"slider_{feat}"
             )
 
         st.markdown("**Socioeconomic Factors**")
-        for feat in ["density", "taxpc", "pctmin80", "wcon", "wtuc", "wfed"]:
+        for feat in ["taxpc", "wtrd", "wage_gap_service_mfg"]:
             mn, mx, dv, step = FEATURE_RANGES[feat]
             feature_vals[feat] = st.slider(
-                FEATURE_LABELS[feat], mn, mx, dv, step,
+                FEATURE_LABELS[feat], float(mn), float(mx), float(dv), float(step),
+                key=f"slider_{feat}"
+            )
+
+        st.markdown("**Demographics**")
+        for feat in ["pctymle", "pctmin80", "mix"]:
+            mn, mx, dv, step = FEATURE_RANGES[feat]
+            feature_vals[feat] = st.slider(
+                FEATURE_LABELS[feat], float(mn), float(mx), float(dv), float(step),
+                key=f"slider_{feat}"
+            )
+
+        st.markdown("**Urbanization**")
+        for feat in ["ldensity"]:
+            mn, mx, dv, step = FEATURE_RANGES[feat]
+            feature_vals[feat] = st.slider(
+                FEATURE_LABELS[feat], float(mn), float(mx), float(dv), float(step),
                 key=f"slider_{feat}"
             )
 
@@ -715,6 +731,27 @@ with tab6:
         height=380,
     )
 
+    st.markdown("---")
+    st.markdown("#### 🔍 Global vs Local Explanation")
+    st.markdown("""
+    **Globally**, the model identifies population density, policing 
+    levels (probability of arrest, police per capita), and 
+    demographic variables (minority percentage, percent young males) 
+    as the key drivers of crime rates across NC counties.
+
+    **Locally**, for any individual county, the prediction is shaped 
+    by the specific combination of arrest probability, police 
+    presence, and demographic composition. A county with moderate 
+    arrest probability (prbarr ≈ 0.28), low police presence 
+    (polpc ≈ 0.0017), and moderate minority composition 
+    (pctmin80 ≈ 17%) receives a predicted crime rate of 
+    approximately 0.0327 — showing how the model integrates 
+    multiple variables for case-specific predictions.
+
+    Use the **What-If Simulator** (Tab 2) to explore local 
+    explanations for any custom county profile interactively.
+    """)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 7 — BIAS & FAIRNESS AUDIT
 # ─────────────────────────────────────────────────────────────────────────────
@@ -788,3 +825,22 @@ with tab7:
     )
     st.dataframe(summary, use_container_width=True, 
                  hide_index=True)
+
+    st.markdown("---")
+    st.markdown("#### ⚠️ Ethical Interpretation")
+    st.markdown("""
+    The model predicts notably different average crime rates across 
+    urban and rural counties, reflecting underlying structural and 
+    environmental variations such as population density and economic 
+    activity.
+
+    Such differences must be interpreted carefully. Without proper 
+    context, the model could lead to **unequal resource allocation** 
+    or **reinforce existing biases** in policing. The fairness gaps 
+    observed here are a product of historical socioeconomic 
+    inequalities in the 1981–87 data — not inherent characteristics 
+    of the counties themselves.
+
+    This model should be used exclusively as a **decision-support 
+    tool with human oversight** to ensure fair and ethical outcomes.
+    """)
