@@ -329,7 +329,7 @@ with tab2:
 with tab3:
     st.markdown("### 🤖 AI Policy Advisor")
     st.markdown(
-        "Powered by **Claude (Anthropic)**. The AI analyses your SHAP feature drivers "
+        "Powered by **Groq API**. The AI analyses your SHAP feature drivers "
         "and generates specific, evidence-based policy recommendations for the county profile "
         "you configured in the What-If Simulator."
     )
