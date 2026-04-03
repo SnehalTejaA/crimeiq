@@ -39,3 +39,4 @@ venv.bak/
 
 # streamlit / plotly
 .streamlit/
+crime_model.pkl
