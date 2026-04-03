@@ -8,17 +8,19 @@
 
 ## What This Does
 
-CrimeIQ is a Streamlit web application that wraps the Phase 3 analytical work
-(VIF selection, Random Forest, SHAP, K-Means) in a live, interactive interface.
+CrimeIQ integrates Phase 3 analytical work with Phase 4 real-world deployment features including scenario simulation, research alignment validation, and a bias & fairness audit.
 
-### 4 Pillars
+### 7 Pillars
 
 | Tab | What it shows |
 |-----|--------------|
 | 🗺️ Crime Heatmap | Folium choropleth of NC crime rates by county, filterable by year |
 | 🎛️ What-If Simulator | Sliders for every feature → live predicted crime rate + SHAP waterfall |
-| 🤖 AI Policy Advisor | Claude API generates evidence-based policy recommendations from SHAP drivers |
+| 🤖 AI Policy Advisor | Groq API generates evidence-based policy recommendations from SHAP drivers |
 | 📊 Analytics Dashboard | Trend charts, feature importance, SHAP summary, model performance |
+| 🎭 Scenario Simulation | Preset scenarios simulating systemic socioeconomic or law enforcement shifts |
+| 🔬 Research Alignment | Validates feature selection against established criminology theory |
+| ⚖️ Bias & Fairness Audit | Analyzes predictive fairness across key demographic sub-groups |
 
 ---
 

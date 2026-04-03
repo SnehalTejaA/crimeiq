@@ -118,12 +118,13 @@ st.markdown("<br>", unsafe_allow_html=True)
 feature_vals = {f: FEATURE_RANGES[f][2] for f in FEATURES}  # defaults
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🗺️  Crime Heatmap",
     "🎛️  What-If Simulator",
     "🤖  AI Policy Advisor",
     "📊  Analytics Dashboard",
     "🎭  Scenario Simulation",
+    "🔬  Research Alignment",
     "⚖️  Bias & Fairness Audit",
 ])
 
@@ -484,182 +485,251 @@ with tab4:
 # ─────────────────────────────────────────────────────────────────────────────
 with tab5:
     st.markdown("### 🎭 Scenario Simulation")
-    st.markdown("Preset scenarios simulating systemic socioeconomic or law enforcement shifts.")
+    st.markdown("Simulate real-world policy changes and see how the model predicts crime rate will respond.")
 
-    scenarios = {
-        "High Policing": {"polpc": 1.3, "prbarr": 1.2},
-        "Police Reduction": {"polpc": 0.7, "prbarr": 0.8},
-        "Economic Decline": {"taxpc": 0.7, "wcon": 0.9, "wtuc": 0.9},
-        "Urban Growth": {"density": 1.2, "urban": "set_1"}
-    }
-    
-    scenario_choice = st.selectbox("Select a scenario to simulate:", list(scenarios.keys()), key="scenario_select")
-    mods = scenarios[scenario_choice]
-    
-    scen_vals = feature_vals.copy()
-    diffs = {}
-    for f, k in mods.items():
-        old = scen_vals[f]
-        if k == "set_1":
-            new = 1.0
-        else:
-            new = old * k
-        # Clamp within valid trained ranges
-        mn, mx, _, _ = FEATURE_RANGES[f]
-        new = max(mn, min(mx, new))
-        scen_vals[f] = new
-        
-        # Track diff for the bar chart
-        if old != 0:
-            pct_diff = ((new - old) / old) * 100
-        else:
-            pct_diff = (new * 100)
-        diffs[FEATURE_LABELS[f]] = pct_diff
+    from data_loader import run_scenario, interpret_query
 
-    # Make predictions
-    b_pred = predict_crime(model_bundle, feature_vals)
-    s_pred = predict_crime(model_bundle, scen_vals)
-    d_pred = s_pred - b_pred
-    d_pct = (d_pred / b_pred * 100) if b_pred != 0 else 0
+    col_left, col_right = st.columns([1, 1])
 
-    c1, c2 = st.columns([1, 1])
-    
-    with c1:
-        st.markdown("**Feature Modifications**")
-        rows = []
-        for f in FEATURES:
-            changed = "Yes" if f in mods else "No"
-            rows.append({
-                "Feature": FEATURE_LABELS[f],
-                "Baseline": feature_vals[f],
-                "Scenario": scen_vals[f],
-                "Changed": changed
-            })
-        df_comp = pd.DataFrame(rows)
-        
-        def highlight_amber(row):
-            return ['background-color: #faeeda; color: black' if row['Changed'] == 'Yes' else '' for _ in row]
-            
-        st.dataframe(
-            df_comp.style.apply(highlight_amber, axis=1),
-            use_container_width=True, hide_index=True
+    with col_left:
+        scenario_choice = st.selectbox(
+            "Pick a preset scenario",
+            ["High Policing", "Police Reduction", 
+             "Economic Decline", "Urban Growth"]
         )
+        nl_query = st.text_input(
+            "Or type a natural language query",
+            placeholder="e.g. what if police presence decreases?"
+        )
+        if nl_query:
+            detected = interpret_query(nl_query)
+            if detected:
+                scenario_choice = detected
+                st.success(f"Detected scenario: {detected}")
+            else:
+                st.warning("Could not detect a scenario. Using selectbox choice.")
 
-        if diffs:
-            df_bar = pd.DataFrame(list(diffs.items()), columns=["Feature", "% Change"])
-            fig_bar = px.bar(df_bar, x="% Change", y="Feature", orientation="h", title="Modifiers Applied")
-            fig_bar.update_layout(height=250, margin=dict(l=0, r=0, t=30, b=0))
-            st.plotly_chart(fig_bar, use_container_width=True)
+    modified_vals = run_scenario(feature_vals, scenario_choice)
+    baseline_pred = predict_crime(model_bundle, feature_vals)
+    scenario_pred = predict_crime(model_bundle, modified_vals)
+    delta_pct = (scenario_pred - baseline_pred) / baseline_pred * 100
 
-    with c2:
-        st.markdown("**Crime Rate Impact**")
-        d1, d2 = st.columns(2)
-        with d1:
-            fg1 = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=b_pred,
-                title={"text": "Baseline Rate"},
-                gauge={"axis": {"range": [0, df[TARGET].max()]}, "bar": {"color": "#6c757d"}}
-            ))
-            fg1.update_layout(height=180, margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fg1, use_container_width=True)
-            
-        with d2:
-            fg2 = go.Figure(go.Indicator(
-                mode="gauge+number+delta",
-                value=s_pred,
-                delta={"reference": b_pred, "valueformat": ".5f"},
-                title={"text": "Scenario Rate"},
-                gauge={"axis": {"range": [0, df[TARGET].max()]}, "bar": {"color": "#E24B4A" if d_pred > 0 else "#3B8BD4"}}
-            ))
-            fg2.update_layout(height=180, margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fg2, use_container_width=True)
-
-        pill_clr = "pill-red" if d_pred > 0 else "pill-green"
-        dir_lbl = f"▲ +{d_pct:.1f}% increase" if d_pred > 0 else f"▼ {abs(d_pct):.1f}% decrease"
-        st.markdown(f'''
+    with col_right:
+        direction = "▲" if delta_pct > 0 else "▼"
+        color = "pill-red" if delta_pct > 0 else "pill-green"
+        st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-title">Delta</div>
-            <div class="metric-value" style="font-size:20px;">{d_pred:+.5f}</div>
-            <span class="{pill_clr}">{dir_lbl}</span>
-        </div>''', unsafe_allow_html=True)
+            <div class="metric-title">Scenario: {scenario_choice}</div>
+            <div class="metric-value">{scenario_pred:.5f}</div>
+            <div class="metric-sub">vs baseline {baseline_pred:.5f}</div>
+            <br>
+            <span class="{color}">
+                {direction} {abs(delta_pct):.1f}% change
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
+    # Side by side gauges
+    g1, g2 = st.columns(2)
+    max_val = df[TARGET].max() * 1.2
+    with g1:
+        st.markdown("**Baseline**")
+        fig_b = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=baseline_pred,
+            gauge={"axis": {"range": [0, max_val]},
+                   "bar": {"color": "#3B8BD4"}},
+            number={"valueformat": ".5f"},
+        ))
+        fig_b.update_layout(height=220, 
+                            margin=dict(t=30,b=10,l=20,r=20))
+        st.plotly_chart(fig_b, use_container_width=True)
+
+    with g2:
+        st.markdown(f"**{scenario_choice}**")
+        fig_s = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=scenario_pred,
+            gauge={"axis": {"range": [0, max_val]},
+                   "bar": {"color": "#E24B4A" 
+                           if delta_pct > 0 else "#3B6D11"}},
+            number={"valueformat": ".5f"},
+        ))
+        fig_s.update_layout(height=220, 
+                            margin=dict(t=30,b=10,l=20,r=20))
+        st.plotly_chart(fig_s, use_container_width=True)
+
+    # Comparison table — which features changed
+    st.markdown("**Feature Changes: Baseline vs Scenario**")
+    comp_rows = []
+    for f in FEATURES:
+        base_v = feature_vals[f]
+        mod_v  = modified_vals[f]
+        changed = base_v != mod_v
+        comp_rows.append({
+            "Feature":  FEATURE_LABELS[f],
+            "Baseline": round(base_v, 5),
+            "Scenario": round(mod_v,  5),
+            "Changed":  "✅" if changed else "",
+            "Delta":    round(mod_v - base_v, 5),
+        })
+    comp_df = pd.DataFrame(comp_rows)
+    st.dataframe(comp_df, use_container_width=True, 
+                 hide_index=True, height=350)
+
+    # Bar chart of changed features only
+    changed_df = comp_df[comp_df["Changed"] == "✅"]
+    if not changed_df.empty:
+        st.markdown("**What Changed**")
+        fig_chg = px.bar(
+            changed_df, x="Delta", y="Feature",
+            orientation="h",
+            color="Delta",
+            color_continuous_scale="RdBu_r",
+            labels={"Delta": "Change in value", "Feature": ""},
+        )
+        fig_chg.update_layout(
+            height=250, 
+            margin=dict(t=20,b=20,l=10,r=10),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_chg, use_container_width=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 6 — BIAS & FAIRNESS AUDIT
+# TAB 6 — RESEARCH ALIGNMENT
 # ─────────────────────────────────────────────────────────────────────────────
 with tab6:
-    st.markdown("### ⚖️ Bias & Fairness Audit")
-    st.markdown("Analyzing predictive fairness across key subgroups in the test set.")
-    
-    # Extract test data
-    X_t = model_bundle["X_test"]
-    y_t = model_bundle["y_test"].values
-    mod = model_bundle["model"]
-    scl = model_bundle["scaler"]
-    
-    p_t = mod.predict(scl.transform(X_t))
-    
-    adf = X_t.copy()
-    adf["actual"] = y_t
-    adf["predicted"] = p_t
-    
-    med_min = adf["pctmin80"].median()
-    
-    groups = [
-        ("Urban vs Rural", "urban", 1, 0, "Urban", "Rural"),
-        ("Western vs Non-western", "west", 1, 0, "Western", "Non-western"),
-        ("Central vs Non-central", "central", 1, 0, "Central", "Non-central"),
-        ("High vs Low Minority", "pctmin80", "high", "low", "> Median", "<= Median")
-    ]
-    
-    res = []
-    
-    for concept, col, v1, v2, l1, l2 in groups:
-        if col == "pctmin80":
-            m1 = adf[col] > med_min
-            m2 = adf[col] <= med_min
-        else:
-            m1 = adf[col] == v1
-            m2 = adf[col] == v2
-            
-        p1 = adf[m1]["predicted"].mean() if m1.sum() > 0 else 0
-        a1 = adf[m1]["actual"].mean() if m1.sum() > 0 else 0
-        p2 = adf[m2]["predicted"].mean() if m2.sum() > 0 else 0
-        a2 = adf[m2]["actual"].mean() if m2.sum() > 0 else 0
-        
-        g = abs(p1 - p2)
-        
-        sent = (f"The model predicts an average crime rate of {p1:.4f} for {l1} counties, "
-                f"compared to {p2:.4f} for {l2} counties—a gap of {g:.4f}.")
-                
-        res.append({
-            "Comparison": concept,
-            "Group 1": l1, "Pred 1": p1, "Act 1": a1,
-            "Group 2": l2, "Pred 2": p2, "Act 2": a2,
-            "Gap": g,
-            "Sentence": sent
-        })
+    st.markdown("### 🔬 Research Alignment")
+    st.markdown("""
+    This tab validates our feature selection against established 
+    criminology theory. Cornwell & Trumbull (1994) and Becker (1968) 
+    argue that crime is influenced by the probability of arrest and 
+    conviction (law enforcement deterrence), economic opportunity 
+    (wages, tax revenue), and demographic composition. The 
+    correlations below confirm our 14 features align with this theory.
+    """)
 
-    for r in res:
-        with st.expander(f"{r['Comparison']} — Gap: {r['Gap']:.5f}", expanded=False):
-            ca, cb = st.columns([1, 2])
-            with ca:
-                st.markdown(f"**{r['Group 1']}**\n- Predicted: {r['Pred 1']:.5f}\n- Actual: {r['Act 1']:.5f}")
-                st.markdown(f"**{r['Group 2']}**\n- Predicted: {r['Pred 2']:.5f}\n- Actual: {r['Act 2']:.5f}")
-                st.info(r['Sentence'])
-            with cb:
-                plotdf = pd.DataFrame({
-                    "Subgroup": [r['Group 1'], r['Group 1'], r['Group 2'], r['Group 2']],
-                    "Metric": ["Predicted", "Actual", "Predicted", "Actual"],
-                    "Crime Rate": [r['Pred 1'], r['Act 1'], r['Pred 2'], r['Act 2']]
+    from data_loader import FEATURE_CATEGORIES
+
+    # Compute correlations
+    corr_rows = []
+    for category, feats in FEATURE_CATEGORIES.items():
+        for f in feats:
+            if f in df.columns:
+                corr = df[f].corr(df[TARGET])
+                corr_rows.append({
+                    "Feature":     FEATURE_LABELS.get(f, f),
+                    "Category":    category,
+                    "Correlation": round(corr, 4),
+                    "Abs Corr":    round(abs(corr), 4),
                 })
-                fig_f = px.bar(plotdf, y="Subgroup", x="Crime Rate", color="Metric", 
-                               barmode="group", orientation="h",
-                               color_discrete_sequence=["#3B8BD4", "#6c757d"])
-                fig_f.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=10))
-                st.plotly_chart(fig_f, use_container_width=True)
-                
-    st.markdown("#### Fairness Gap Summary")
-    summ = pd.DataFrame(res)[["Comparison", "Group 1", "Group 2", "Gap"]].sort_values("Gap", ascending=False)
-    st.dataframe(summ, use_container_width=True, hide_index=True)
+    corr_df = pd.DataFrame(corr_rows).sort_values(
+        "Abs Corr", ascending=False
+    )
+
+    # Category average bar chart
+    cat_avg = (corr_df.groupby("Category")["Abs Corr"]
+               .mean()
+               .reset_index()
+               .sort_values("Abs Corr", ascending=True))
+    fig_cat = px.bar(
+        cat_avg, x="Abs Corr", y="Category",
+        orientation="h",
+        color="Abs Corr",
+        color_continuous_scale="Blues",
+        labels={"Abs Corr": "Avg |Correlation| with Crime Rate",
+                "Category": ""},
+        title="Average Feature Correlation by Criminology Category",
+    )
+    fig_cat.update_layout(
+        height=300,
+        margin=dict(t=40,b=20,l=10,r=10),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        coloraxis_showscale=False,
+    )
+    st.plotly_chart(fig_cat, use_container_width=True)
+
+    # Full feature correlation table
+    st.markdown("**Individual Feature Correlations with Crime Rate**")
+    st.dataframe(
+        corr_df[["Feature","Category","Correlation","Abs Corr"]],
+        use_container_width=True,
+        hide_index=True,
+        height=380,
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 7 — BIAS & FAIRNESS AUDIT
+# ─────────────────────────────────────────────────────────────────────────────
+with tab7:
+    st.markdown("### ⚖️ Bias & Fairness Audit")
+    st.markdown("""
+    This audit examines whether the Random Forest model predicts 
+    systematically different crime rates across demographic and 
+    geographic subgroups. Large gaps may indicate the model has 
+    learned structural inequalities present in the 1981-87 data.
+    """)
+
+    from data_loader import run_fairness_audit
+
+    audit_df = run_fairness_audit(model_bundle)
+
+    interpretations = {
+        "Urban vs Rural": 
+            "Urban counties are predicted to have different crime rates than rural ones, reflecting density and resource differences.",
+        "Western vs Rest": 
+            "Western NC counties show a prediction gap, likely driven by geographic and economic differences captured in the data.",
+        "Central vs Rest": 
+            "Central counties show a distinct prediction pattern compared to eastern counties.",
+        "High vs Low Minority": 
+            "Counties with above-median minority populations are predicted differently, reflecting socioeconomic disparities in the historical data.",
+    }
+
+    for _, row in audit_df.iterrows():
+        st.markdown(f"**{row['Subgroup']}**")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Predicted — Group A", f"{row['Pred A']:.5f}")
+        c2.metric("Predicted — Group B", f"{row['Pred B']:.5f}")
+        c3.metric("Fairness Gap", f"{row['Gap']:.5f}",
+                  delta=f"{'⚠️ Notable' if row['Gap'] > 0.005 else '✅ Low'}",
+                  delta_color="off")
+
+        fig_audit = px.bar(
+            pd.DataFrame({
+                "Group":  [row["Group A"], row["Group A"],
+                           row["Group B"], row["Group B"]],
+                "Type":   ["Predicted","Actual",
+                           "Predicted","Actual"],
+                "Value":  [row["Pred A"], row["Act A"],
+                           row["Pred B"], row["Act B"]],
+            }),
+            x="Value", y="Group", color="Type",
+            orientation="h", barmode="group",
+            color_discrete_map={"Predicted":"#534AB7",
+                                "Actual":"#1D9E75"},
+            labels={"Value": "Crime Rate", "Group": ""},
+        )
+        fig_audit.update_layout(
+            height=180,
+            margin=dict(t=10,b=10,l=10,r=10),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", y=1.2),
+        )
+        st.plotly_chart(fig_audit, use_container_width=True)
+        st.caption(interpretations.get(row["Subgroup"], ""))
+        st.markdown("---")
+
+    # Summary table
+    st.markdown("#### 📋 Fairness Gap Summary")
+    summary = audit_df[["Subgroup","Gap"]].sort_values(
+        "Gap", ascending=False
+    ).copy()
+    summary["Verdict"] = summary["Gap"].apply(
+        lambda g: "🚨 High" if g > 0.010 
+                  else ("⚠️ Notable" if g > 0.005 else "✅ Low")
+    )
+    st.dataframe(summary, use_container_width=True, 
+                 hide_index=True)
