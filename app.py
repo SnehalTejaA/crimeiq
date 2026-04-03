@@ -118,11 +118,13 @@ st.markdown("<br>", unsafe_allow_html=True)
 feature_vals = {f: FEATURE_RANGES[f][2] for f in FEATURES}  # defaults
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🗺️  Crime Heatmap",
     "🎛️  What-If Simulator",
     "🤖  AI Policy Advisor",
     "📊  Analytics Dashboard",
+    "🎭  Scenario Simulation",
+    "⚖️  Bias & Fairness Audit",
 ])
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -476,3 +478,188 @@ with tab4:
         "Status": ["✅ Best (used)", "🟡 Runner-up", "🔵 Baseline"],
     }
     st.dataframe(pd.DataFrame(perf_data), use_container_width=True, hide_index=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 5 — SCENARIO SIMULATION
+# ─────────────────────────────────────────────────────────────────────────────
+with tab5:
+    st.markdown("### 🎭 Scenario Simulation")
+    st.markdown("Preset scenarios simulating systemic socioeconomic or law enforcement shifts.")
+
+    scenarios = {
+        "High Policing": {"polpc": 1.3, "prbarr": 1.2},
+        "Police Reduction": {"polpc": 0.7, "prbarr": 0.8},
+        "Economic Decline": {"taxpc": 0.7, "wcon": 0.9, "wtuc": 0.9},
+        "Urban Growth": {"density": 1.2, "urban": "set_1"}
+    }
+    
+    scenario_choice = st.selectbox("Select a scenario to simulate:", list(scenarios.keys()), key="scenario_select")
+    mods = scenarios[scenario_choice]
+    
+    scen_vals = feature_vals.copy()
+    diffs = {}
+    for f, k in mods.items():
+        old = scen_vals[f]
+        if k == "set_1":
+            new = 1.0
+        else:
+            new = old * k
+        # Clamp within valid trained ranges
+        mn, mx, _, _ = FEATURE_RANGES[f]
+        new = max(mn, min(mx, new))
+        scen_vals[f] = new
+        
+        # Track diff for the bar chart
+        if old != 0:
+            pct_diff = ((new - old) / old) * 100
+        else:
+            pct_diff = (new * 100)
+        diffs[FEATURE_LABELS[f]] = pct_diff
+
+    # Make predictions
+    b_pred = predict_crime(model_bundle, feature_vals)
+    s_pred = predict_crime(model_bundle, scen_vals)
+    d_pred = s_pred - b_pred
+    d_pct = (d_pred / b_pred * 100) if b_pred != 0 else 0
+
+    c1, c2 = st.columns([1, 1])
+    
+    with c1:
+        st.markdown("**Feature Modifications**")
+        rows = []
+        for f in FEATURES:
+            changed = "Yes" if f in mods else "No"
+            rows.append({
+                "Feature": FEATURE_LABELS[f],
+                "Baseline": feature_vals[f],
+                "Scenario": scen_vals[f],
+                "Changed": changed
+            })
+        df_comp = pd.DataFrame(rows)
+        
+        def highlight_amber(row):
+            return ['background-color: #faeeda; color: black' if row['Changed'] == 'Yes' else '' for _ in row]
+            
+        st.dataframe(
+            df_comp.style.apply(highlight_amber, axis=1),
+            use_container_width=True, hide_index=True
+        )
+
+        if diffs:
+            df_bar = pd.DataFrame(list(diffs.items()), columns=["Feature", "% Change"])
+            fig_bar = px.bar(df_bar, x="% Change", y="Feature", orientation="h", title="Modifiers Applied")
+            fig_bar.update_layout(height=250, margin=dict(l=0, r=0, t=30, b=0))
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    with c2:
+        st.markdown("**Crime Rate Impact**")
+        d1, d2 = st.columns(2)
+        with d1:
+            fg1 = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=b_pred,
+                title={"text": "Baseline Rate"},
+                gauge={"axis": {"range": [0, df[TARGET].max()]}, "bar": {"color": "#6c757d"}}
+            ))
+            fg1.update_layout(height=180, margin=dict(l=10, r=10, t=30, b=10))
+            st.plotly_chart(fg1, use_container_width=True)
+            
+        with d2:
+            fg2 = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=s_pred,
+                delta={"reference": b_pred, "valueformat": ".5f"},
+                title={"text": "Scenario Rate"},
+                gauge={"axis": {"range": [0, df[TARGET].max()]}, "bar": {"color": "#E24B4A" if d_pred > 0 else "#3B8BD4"}}
+            ))
+            fg2.update_layout(height=180, margin=dict(l=10, r=10, t=30, b=10))
+            st.plotly_chart(fg2, use_container_width=True)
+
+        pill_clr = "pill-red" if d_pred > 0 else "pill-green"
+        dir_lbl = f"▲ +{d_pct:.1f}% increase" if d_pred > 0 else f"▼ {abs(d_pct):.1f}% decrease"
+        st.markdown(f'''
+        <div class="metric-card">
+            <div class="metric-title">Delta</div>
+            <div class="metric-value" style="font-size:20px;">{d_pred:+.5f}</div>
+            <span class="{pill_clr}">{dir_lbl}</span>
+        </div>''', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 6 — BIAS & FAIRNESS AUDIT
+# ─────────────────────────────────────────────────────────────────────────────
+with tab6:
+    st.markdown("### ⚖️ Bias & Fairness Audit")
+    st.markdown("Analyzing predictive fairness across key subgroups in the test set.")
+    
+    # Extract test data
+    X_t = model_bundle["X_test"]
+    y_t = model_bundle["y_test"].values
+    mod = model_bundle["model"]
+    scl = model_bundle["scaler"]
+    
+    p_t = mod.predict(scl.transform(X_t))
+    
+    adf = X_t.copy()
+    adf["actual"] = y_t
+    adf["predicted"] = p_t
+    
+    med_min = adf["pctmin80"].median()
+    
+    groups = [
+        ("Urban vs Rural", "urban", 1, 0, "Urban", "Rural"),
+        ("Western vs Non-western", "west", 1, 0, "Western", "Non-western"),
+        ("Central vs Non-central", "central", 1, 0, "Central", "Non-central"),
+        ("High vs Low Minority", "pctmin80", "high", "low", "> Median", "<= Median")
+    ]
+    
+    res = []
+    
+    for concept, col, v1, v2, l1, l2 in groups:
+        if col == "pctmin80":
+            m1 = adf[col] > med_min
+            m2 = adf[col] <= med_min
+        else:
+            m1 = adf[col] == v1
+            m2 = adf[col] == v2
+            
+        p1 = adf[m1]["predicted"].mean() if m1.sum() > 0 else 0
+        a1 = adf[m1]["actual"].mean() if m1.sum() > 0 else 0
+        p2 = adf[m2]["predicted"].mean() if m2.sum() > 0 else 0
+        a2 = adf[m2]["actual"].mean() if m2.sum() > 0 else 0
+        
+        g = abs(p1 - p2)
+        
+        sent = (f"The model predicts an average crime rate of {p1:.4f} for {l1} counties, "
+                f"compared to {p2:.4f} for {l2} counties—a gap of {g:.4f}.")
+                
+        res.append({
+            "Comparison": concept,
+            "Group 1": l1, "Pred 1": p1, "Act 1": a1,
+            "Group 2": l2, "Pred 2": p2, "Act 2": a2,
+            "Gap": g,
+            "Sentence": sent
+        })
+
+    for r in res:
+        with st.expander(f"{r['Comparison']} — Gap: {r['Gap']:.5f}", expanded=False):
+            ca, cb = st.columns([1, 2])
+            with ca:
+                st.markdown(f"**{r['Group 1']}**\n- Predicted: {r['Pred 1']:.5f}\n- Actual: {r['Act 1']:.5f}")
+                st.markdown(f"**{r['Group 2']}**\n- Predicted: {r['Pred 2']:.5f}\n- Actual: {r['Act 2']:.5f}")
+                st.info(r['Sentence'])
+            with cb:
+                plotdf = pd.DataFrame({
+                    "Subgroup": [r['Group 1'], r['Group 1'], r['Group 2'], r['Group 2']],
+                    "Metric": ["Predicted", "Actual", "Predicted", "Actual"],
+                    "Crime Rate": [r['Pred 1'], r['Act 1'], r['Pred 2'], r['Act 2']]
+                })
+                fig_f = px.bar(plotdf, y="Subgroup", x="Crime Rate", color="Metric", 
+                               barmode="group", orientation="h",
+                               color_discrete_sequence=["#3B8BD4", "#6c757d"])
+                fig_f.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=10))
+                st.plotly_chart(fig_f, use_container_width=True)
+                
+    st.markdown("#### Fairness Gap Summary")
+    summ = pd.DataFrame(res)[["Comparison", "Group 1", "Group 2", "Gap"]].sort_values("Gap", ascending=False)
+    st.dataframe(summ, use_container_width=True, hide_index=True)
