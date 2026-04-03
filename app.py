@@ -55,7 +55,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Dataset:** Cornwell & Trumbull NC (1981–87)")
     st.markdown("**Counties:** 90 | **Observations:** 630")
-    st.markdown("**Best model:** Random Forest (R² ≈ 0.905)")
+    st.markdown("**Best model:** Random Forest (R² ≈ 0.897)")
     st.markdown("---")
     st.markdown("**Navigation**")
     st.markdown("Use the tabs above to explore:")
@@ -110,8 +110,8 @@ with k3:
 with k4:
     st.markdown(f"""<div class="metric-card">
         <div class="metric-title">Features Used</div>
-        <div class="metric-value">14</div>
-        <div class="metric-sub">VIF-selected (all &lt; 10)</div>
+        <div class="metric-value">15</div>
+        <div class="metric-sub">Phase 4 features</div>
     </div>""", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
